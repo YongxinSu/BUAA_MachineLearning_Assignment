@@ -11,7 +11,9 @@ from tqdm import tqdm
 import wandb
 import logging
 
+from utils.metric import KLD_gpu, calc_cc_score_GPU
 from evaluate import evaluate
+from torch.utils.tensorboard import SummaryWriter
 
 def get_args():
     parser = argparse.ArgumentParser(description='Train the UNet on images and target masks')
@@ -39,6 +41,7 @@ def run(
     img_scale = config['train']['img_scale']
     dir_checkpoint = config['train']['dir_checkpoint']
     num_work = config['train']['num_work']
+    writer = SummaryWriter()
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
@@ -52,14 +55,9 @@ def run(
     train_loader = DataLoader(train_set, shuffle=True, **loader_args)
     val_loader = DataLoader(val_set, shuffle=False, drop_last=True, **loader_args)
 
-    model = UNet(config).cuda()
+    model = UNet(config).to(device)
     
-    # (Initialize logging)
-    experiment = wandb.init(project='U-Net', resume='allow', anonymous='must')
-    experiment.config.update(
-        dict(epochs=epochs, batch_size=batch_size, learning_rate=learning_rate,
-             val_percent=val_percent, save_checkpoint=save_checkpoint, img_scale=img_scale, amp=amp)
-    )
+
 
     logging.info(f'''Starting training:
         Epochs:          {epochs}
@@ -78,7 +76,7 @@ def run(
                               lr=learning_rate, weight_decay=weight_decay, momentum=momentum, foreach=True)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=5)  # goal: maximize Dice score
     grad_scaler = torch.cuda.amp.GradScaler(enabled=amp)
-    criterion = torch.nn.CrossEntropyLoss() if model.n_classes > 1 else torch.nn.BCEWithLogitsLoss()
+    criterion = lambda pred, target: 0.5 * (1 - calc_cc_score_GPU(pred, target)) + 0.5 * KLD_gpu(pred, target) # torch.nn.CrossEntropyLoss() 
     global_step = 0
 
     # 5. Begin training
@@ -88,10 +86,6 @@ def run(
         with tqdm(total=n_train, desc=f'Epoch {epoch}/{epochs}', unit='img') as pbar:
             for batch in train_loader:
                 images, true_masks = batch['image'], batch['label']
-                # print(images.shape, true_masks.shape)
-                # import pdb
-                # pdb.set_trace()
-                
                 assert images.shape[1] == model.n_channels, \
                     f'Network has been defined with {model.n_channels} input channels, ' \
                     f'but loaded images have {images.shape[1]} channels. Please check that ' \
@@ -99,11 +93,12 @@ def run(
 
                 images = images.to(device=device, dtype=torch.float32, memory_format=torch.channels_last)
                 true_masks = true_masks.to(device=device, dtype=torch.float32)
-
+                    
                 with torch.autocast(device.type if device.type != 'mps' else 'cpu', enabled=amp):
                     masks_pred = model(images)
                     loss = criterion(masks_pred, true_masks.float())
-                    
+                
+                # print(masks_pred.sum())
                 optimizer.zero_grad(set_to_none=True)
                 grad_scaler.scale(loss).backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clipping)
@@ -113,24 +108,21 @@ def run(
                 pbar.update(images.shape[0])
                 global_step += 1
                 epoch_loss += loss.item()
-                experiment.log({
-                    'train loss': loss.item(),
-                    'step': global_step,
-                    'epoch': epoch
-                })
+                
+                writer.add_scalar('train loss', loss.item(), global_step)
                 pbar.set_postfix(**{'loss (batch)': loss.item()})
 
                 # Evaluation round
                 division_step = (n_train // (5 * batch_size))
                 if division_step > 0:
                     if global_step % division_step == 1:
-                        histograms = {}
-                        for tag, value in model.named_parameters():
-                            tag = tag.replace('/', '.')
-                            if not (torch.isinf(value) | torch.isnan(value)).any():
-                                histograms['Weights/' + tag] = wandb.Histogram(value.data.cpu())
-                            if not (torch.isinf(value.grad) | torch.isnan(value.grad)).any():
-                                histograms['Gradients/' + tag] = wandb.Histogram(value.grad.data.cpu())
+                        # histograms = {}
+                        # for tag, value in model.named_parameters():
+                        #     tag = tag.replace('/', '.')
+                        #     if not (torch.isinf(value) | torch.isnan(value)).any():
+                        #         histograms['Weights/' + tag] = wandb.Histogram(value.data.cpu())
+                        #     if not (torch.isinf(value.grad) | torch.isnan(value.grad)).any():
+                        #         histograms['Gradients/' + tag] = wandb.Histogram(value.grad.data.cpu())
 
                         score_dict = evaluate(model, val_loader, device, amp)
                         val_score = score_dict['dice']
@@ -138,20 +130,13 @@ def run(
 
                         logging.info('Validation Dice score: {}'.format(val_score))
                         try:
-                            experiment.log({
-                                'learning rate': optimizer.param_groups[0]['lr'],
-                                'validation Dice': val_score,
-                                'KLD': score_dict['kld'],
-                                'cc': score_dict['cc'],
-                                'images': wandb.Image(images[0].cpu()),
-                                'masks': {
-                                    'true': wandb.Image(true_masks[0].float().cpu()),
-                                    'pred': wandb.Image(masks_pred.argmax(dim=1)[0].float().cpu()),
-                                },
-                                'step': global_step,
-                                'epoch': epoch,
-                                **histograms
-                            })
+                            writer.add_scalar('KLD', score_dict['kld'], global_step)
+                            writer.add_scalar('cc', score_dict['cc'], global_step)
+                            writer.add_scalar('valDice', val_score, global_step)
+                            
+                            writer.add_images('image_batch', images, global_step)
+                            writer.add_images('mask_batch', masks_pred, global_step)
+                            writer.add_images('gt_batch', true_masks, global_step)
                         except:
                             pass
 

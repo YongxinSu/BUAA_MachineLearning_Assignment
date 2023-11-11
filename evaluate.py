@@ -15,11 +15,14 @@ def evaluate(net, dataloader, device, amp):
     dice_score = 0
     kld_score = 0
     cc_score = 0
-    # iterate over the validation set
+    
+    detailed_cc = dict()
+    detailed_kld = dict()
+    
     with torch.autocast(device.type if device.type != 'mps' else 'cpu', enabled=amp):
         for batch in tqdm(dataloader, total=num_val_batches, desc='Validation round', unit='batch', leave=False):
-            image, mask_true = batch['image'], batch['label']
-
+            image, mask_true, cls = batch['image'], batch['label'], batch['cls']
+            
             # move images and labels to correct device and type
             image = image.to(device=device, dtype=torch.float32, memory_format=torch.channels_last)
             mask_true = mask_true.to(device=device, dtype=torch.float32)
@@ -38,22 +41,39 @@ def evaluate(net, dataloader, device, amp):
             mask_pred = mask_pred.detach().cpu().numpy().reshape(-1)
             mask_true = mask_true.detach().cpu().numpy().reshape(-1)
             
-            t = KLD(mask_pred, mask_true)
-            if not math.isnan(t):
-                kld_score =  kld_score + t
-            
-            # calc cc
-            t = calc_cc_score(mask_pred, mask_true)
-            if not math.isnan(t):
-                cc_score = cc_score + t
-            
+            for i in range(len(cls)):
+                if not detailed_cc.get(cls[i]):
+                    detailed_cc[cls[i]] = []
+                
+                if not detailed_kld.get(cls[i]):
+                    detailed_kld[cls[i]] = []
+                    
+                
+                t = KLD(mask_pred, mask_true)
+                if not math.isnan(t):
+                    kld_score =  kld_score + t
+                
+                detailed_cc[cls[i]].append(t)
+                # calc cc
+                t = calc_cc_score(mask_pred, mask_true)
+                if not math.isnan(t):
+                    cc_score = cc_score + t
+                
+                detailed_kld[cls[i]].append(t)
+                
     dice_score = dice_score / max(num_val_batches, 1)
     kld_score = kld_score / max(num_val_batches, 1)
     cc_score = cc_score / max(num_val_batches, 1)
     
+    for k, v in detailed_cc.items():
+        detailed_cc[k] = sum(v) / len(v)
+    
+    for k, v in detailed_kld.items():
+        detailed_kld[k] = sum(v) / len(v)
+        
     net.mode = 'train'
     net.train()
-    return {'dice': dice_score, 'kld': kld_score, 'cc': cc_score}
+    return {'dice': dice_score, 'kld': kld_score, 'cc': cc_score, 'detailed_cc': detailed_cc, 'detailed_kld': detailed_kld}
 
  
 

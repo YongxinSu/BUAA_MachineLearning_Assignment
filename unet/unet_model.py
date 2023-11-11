@@ -26,7 +26,7 @@ class UNet(nn.Module):
         self.up4 = (Up(hiden_channels[1], hiden_channels[0], bilinear))
         self.outc = (OutConv(hiden_channels[0], n_classes))
         
-        self.sigmoid = torch.nn.Sigmoid()
+        self.sigmoid = torch.nn.ReLU()# torch.nn.Sigmoid()
         self.mode = 'train'
 
     def forward(self, x):
@@ -41,10 +41,15 @@ class UNet(nn.Module):
         x = self.up4(x, x1)
         logits = self.outc(x)
         
-        if self.mode != 'train':
-            logits = self.sigmoid(logits)
+        # if self.mode != 'train':
+        logits = self.heatmap(logits)
         return logits
 
+    def heatmap(self, x, eps = 1e-7):
+        x -= torch.min(x, dim=0)[0]
+        x = torch.div(x, eps + torch.max(x, dim=0)[0])
+        # print(x.sum().item())
+        return x
     def use_checkpointing(self):
         self.inc = torch.utils.checkpoint(self.inc)
         self.down1 = torch.utils.checkpoint(self.down1)
