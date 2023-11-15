@@ -13,9 +13,10 @@ import torch
 def KLD(q, p):
     # q: Ground-truth saliency map
     # p: Predicted saliency map
+    # b = q.shape[0]
     p = normalize(p, method='sum')
     q = normalize(q, method='sum')
-    return np.sum(np.where(p != 0, p * np.log((p+EPSILON) / (q+EPSILON)), 0))
+    return np.sum(np.where(p != 0, p * np.log((p+EPSILON) / (q+EPSILON)), 0)) 
 
 
 def normalize(x, method='standard', axis=None):
@@ -73,7 +74,7 @@ def calc_cc_score_GPU(gtsAnns, resAnns):
 def calc_cc_score(gtsAnn, resAnn):
     # gtsAnn: Ground-truth saliency map
     # resAnn: Predicted saliency map
-
+    # b = gtsAnn.shape[0]
     fixationMap = gtsAnn - np.mean(gtsAnn)
     if np.max(fixationMap) > 0:
         fixationMap = fixationMap / np.std(fixationMap)

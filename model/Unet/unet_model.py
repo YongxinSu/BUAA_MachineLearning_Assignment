@@ -1,16 +1,18 @@
 """ Full assembly of the parts to form the complete network """
 
 from .unet_parts import *
+import torch.nn.init as init
 
-
-class UNet(nn.Module):
+class Unet(nn.Module):
     def __init__(self, config, bilinear=False):
+        assert config['model_name'] == 'Unet'
         
-        n_channels = config['Unet']['n_channels']
-        n_classes = config['Unet']['n_classes']
-        bilinear = config['Unet']['bilinear']
-        hiden_channels = config['Unet']['hiden_channels']
-        super(UNet, self).__init__()
+        n_channels = config['n_channels']
+        n_classes = config['n_classes']
+        bilinear = config['bilinear']
+        hiden_channels = config['hiden_channels']
+        
+        super(Unet, self).__init__()
         self.n_channels = n_channels
         self.n_classes = n_classes
         self.bilinear = bilinear
@@ -18,7 +20,7 @@ class UNet(nn.Module):
         self.down1 = (Down(hiden_channels[0], hiden_channels[1]))
         self.down2 = (Down(hiden_channels[1], hiden_channels[2]))
         self.down3 = (Down(hiden_channels[2], hiden_channels[3]))
-        factor = 2 if bilinear else 1
+        factor = 1 #  if bilinear else 1
         self.down4 = (Down(hiden_channels[3], hiden_channels[3] * 2 // factor))
         self.up1 = (Up(hiden_channels[3] * 2, hiden_channels[3] // factor, bilinear))
         self.up2 = (Up(hiden_channels[3], hiden_channels[2] // factor, bilinear))
@@ -26,10 +28,13 @@ class UNet(nn.Module):
         self.up4 = (Up(hiden_channels[1], hiden_channels[0], bilinear))
         self.outc = (OutConv(hiden_channels[0], n_classes))
         
-        self.sigmoid = torch.nn.ReLU()# torch.nn.Sigmoid()
+        self.sigmoid = torch.nn.Sigmoid()
         self.mode = 'train'
+        
+        self.init_weights()
 
     def forward(self, x):
+        
         x1 = self.inc(x)
         x2 = self.down1(x1)
         x3 = self.down2(x2)
@@ -42,7 +47,8 @@ class UNet(nn.Module):
         logits = self.outc(x)
         
         # if self.mode != 'train':
-        logits = self.heatmap(logits)
+
+        logits = self.sigmoid(logits)
         return logits
 
     def heatmap(self, x, eps = 1e-7):
@@ -50,6 +56,14 @@ class UNet(nn.Module):
         x = torch.div(x, eps + torch.max(x, dim=0)[0])
         # print(x.sum().item())
         return x
+    
+    def init_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                init.kaiming_normal_(m.weight, nonlinearity='relu')
+            elif isinstance(m, nn.ConvTranspose2d):
+                init.normal_(m.weight, 0.01, 0.00001)
+                
     def use_checkpointing(self):
         self.inc = torch.utils.checkpoint(self.inc)
         self.down1 = torch.utils.checkpoint(self.down1)

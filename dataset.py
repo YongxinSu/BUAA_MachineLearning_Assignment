@@ -13,7 +13,7 @@ class MLDataSet(Dataset):
     def __init__(self, args, config, mode: str='train') -> None:
         super().__init__()
         
-        image_size = config['train']['image_size']
+        image_size = config['image_size']
         self.transform = transforms.Compose([
             transforms.Resize(image_size),
             transforms.ToTensor(),

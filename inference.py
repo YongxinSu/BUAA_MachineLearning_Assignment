@@ -6,14 +6,13 @@ from pathlib import Path
 from dataset import MLDataSet
 from torch.utils.data import DataLoader 
 
-from unet.unet_model import UNet
 from evaluate import evaluate
-
+from model import get_model
 def get_args():
     parser = argparse.ArgumentParser(description='Train the UNet on images and target masks')
-    parser.add_argument('--config', type=str, default='./config.yaml', help='config yaml path')
+    parser.add_argument('--config', type=str, default='./config.yml', help='config yaml path')
     parser.add_argument('--data', type=str, default='./data', help='data path')
-    parser.add_argument('--model', type=str, default='./checkpoint/checkpoint_epoch15.pth', help='inference checkpoint')
+    parser.add_argument('--model', type=str, default='./checkpoint/checkpoint_epoch100.pth', help='inference checkpoint')
     return parser.parse_args()
 
 
@@ -29,8 +28,7 @@ def inference(args, config):
     
     dataloader = DataLoader(dataset, shuffle=False, drop_last=True, **loader_args)
     
-    model = UNet(config).to(device)
-
+    model = get_model(config).to(device)
     state_dict = torch.load(args.model)
     model.load_state_dict(state_dict)
     

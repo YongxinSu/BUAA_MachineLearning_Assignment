@@ -1,22 +1,37 @@
-train:
-  epochs: 1000
-  batch_size: 4
-  lr: 0.0001
-  val_percent: 0.01
-  weight_decay: 0.000000001
-  momentum: 0.999
-  amp: False
-  device: 'cuda:0'
-  gradient_clipping: 0.1
-  save_checkpoint: True
-  img_scale: 0.1
-  dir_checkpoint: './checkpoint'
-  image_size: [540, 960]
-  num_work: 0
-  
+
+epochs: 100
+batch_size: 12
+lr: 0.001
+val_percent: 0.01
+weight_decay: 0.000000001
+momentum: 0.9
+amp: False
+device: 'cuda:0'
+gradient_clipping: 0.1
+save_checkpoint: True
+img_scale: 0.1
+dir_checkpoint: './checkpoint'
+image_size: [224, 224] # [540, 960]
+num_work: 0
+model: 'Transunet'
 
 Unet:
+  model_name: 'Unet'
   n_channels: 3
   n_classes: 1
   bilinear: False
   hiden_channels: [32, 64, 128, 256]
+
+SalPreNet:
+  model_name: 'SalPreNet'
+
+CE:
+  model_name: 'CE'
+  
+Transunet:
+  model_name: 'Transunet'
+  img_size: 224
+  num_classes: 1
+  vit_name: 'R50-ViT-B_16'
+  pretrained_path: 'imagenet21k_R50+ViT-B_16.npz'
+  vit_patches_size: 16
