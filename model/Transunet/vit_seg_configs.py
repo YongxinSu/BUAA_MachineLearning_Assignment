@@ -44,15 +44,15 @@ def get_r50_b16_config():
     config = get_b16_config()
     config.patches.grid = (16, 16)
     config.resnet = ml_collections.ConfigDict()
-    config.resnet.num_layers = (3, 4, 9)
+    config.resnet.num_layers = (3, 4, 4, 9, 9)
     config.resnet.width_factor = 1
 
     config.classifier = 'seg'
     config.pretrained_path = '../model/vit_checkpoint/imagenet21k/R50+ViT-B_16.npz'
-    config.decoder_channels = (256, 128, 64, 16)
-    config.skip_channels = [512, 256, 64, 16]
+    config.decoder_channels = (256, 128, 64, 64, 64, 16)
+    config.skip_channels = [512, 256, 64, 64, 64, 16]
     config.n_classes = 2
-    config.n_skip = 3
+    config.n_skip = 5
     config.activation = 'softmax'
 
     return config

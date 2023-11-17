@@ -5,7 +5,7 @@ from utils.metric import calc_cc_score, KLD
 from utils.dice_score import multiclass_dice_coeff, dice_coeff
 import math
 import numpy as np
-
+from PIL import Image
 
 @torch.inference_mode()
 def evaluate(net, dataloader, device, amp):
@@ -35,14 +35,22 @@ def evaluate(net, dataloader, device, amp):
             # mask_pred = (F.sigmoid(mask_pred) > 0.5).float()
             # compute the Dice score
             # print(mask_pred.shape, mask_true.shape)
-            dice_score += dice_coeff(mask_pred, mask_true, reduce_batch_first=False)
+            # dice_score += dice_coeff(mask_pred, mask_true, reduce_batch_first=False)
             
             # calc KDL
             
-            mask_pred = mask_pred.detach().cpu().numpy().reshape(B, -1)
-            mask_true = mask_true.detach().cpu().numpy().reshape(B, -1)
+            mask_pred = mask_pred.detach().cpu().numpy() # .reshape(B, -1)
+            mask_true = mask_true.detach().cpu().numpy() # .reshape(B, -1)
             
+            # print(mask_pred.shape, mask_true.shape)
+             
             for i in range(B):
+                img = Image.fromarray(mask_pred[i][0])
+                img = img.resize((mask_true.shape[-1], mask_true.shape[-2]))
+                pred = np.array(img).reshape(-1)
+                true = mask_true[i][0].reshape(-1)
+                
+                # print(pred.shape, true.shape)
                 if not detailed_cc.get(cls[i]):
                     detailed_cc[cls[i]] = []
                 
@@ -50,12 +58,12 @@ def evaluate(net, dataloader, device, amp):
                     detailed_kld[cls[i]] = []
                     
                 
-                t = KLD(mask_pred[i], mask_true[i])
+                t = KLD(pred, true)
                 kld_score =  kld_score + t
                 
                 detailed_kld[cls[i]].append(t)
                 # calc cc
-                t = calc_cc_score(mask_pred[i], mask_true[i])
+                t = calc_cc_score(pred, true)
                 
                 cc_score = cc_score + t
                 

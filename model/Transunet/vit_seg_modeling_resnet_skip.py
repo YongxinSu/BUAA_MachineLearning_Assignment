@@ -109,6 +109,7 @@ class PreActBottleneck(nn.Module):
             self.gn_proj.weight.copy_(proj_gn_weight.view(-1))
             self.gn_proj.bias.copy_(proj_gn_bias.view(-1))
 
+
 class ResNetV2(nn.Module):
     """Implementation of Pre-activation (v2) ResNet mode."""
 
@@ -125,8 +126,22 @@ class ResNetV2(nn.Module):
         ]))
 
         self.body = nn.Sequential(OrderedDict([
-            ('block1', nn.Sequential(OrderedDict(
+            ('d0', nn.Sequential(OrderedDict(
                 [('unit1', PreActBottleneck(cin=width, cout=width*4, cmid=width))] +
+                [(f'unit{i:d}', PreActBottleneck(cin=width*4, cout=width*4, cmid=width)) for i in range(2, 3 + 1)],
+                ))),
+            ('c0', nn.Sequential(nn.Conv2d(in_channels=width*4, out_channels=width, kernel_size=3, stride=2, padding=1),
+                                  nn.GroupNorm(32, width, eps=1e-6),
+                                  nn.ReLU(inplace=True))),
+            ('d1', nn.Sequential(OrderedDict(
+                [('unit1', PreActBottleneck(cin=width, cout=width*4, cmid=width))] +
+                [(f'unit{i:d}', PreActBottleneck(cin=width*4, cout=width*4, cmid=width)) for i in range(2, block_units[0] + 1)],
+                ))),
+            ('c1', nn.Sequential(nn.Conv2d(in_channels=width*4, out_channels=width, kernel_size=3, stride=2, padding=1),
+                                  nn.GroupNorm(32, width, eps=1e-6),
+                                  nn.ReLU(inplace=True))),
+            ('block1', nn.Sequential(OrderedDict(
+                [('unit1', PreActBottleneck(cin=width, cout=width*4, cmid=width, stride=2))] +
                 [(f'unit{i:d}', PreActBottleneck(cin=width*4, cout=width*4, cmid=width)) for i in range(2, block_units[0] + 1)],
                 ))),
             ('block2', nn.Sequential(OrderedDict(
@@ -144,17 +159,24 @@ class ResNetV2(nn.Module):
         b, c, in_size, _ = x.size()
         x = self.root(x)
         features.append(x)
-        x = nn.MaxPool2d(kernel_size=3, stride=2, padding=0)(x)
+        # x = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)(x)
         for i in range(len(self.body)-1):
             x = self.body[i](x)
-            right_size = int(in_size / 4 / (i+1))
-            if x.size()[2] != right_size:
-                pad = right_size - x.size()[2]
-                assert pad < 3 and pad > 0, "x {} should {}".format(x.size(), right_size)
-                feat = torch.zeros((b, x.size()[1], right_size, right_size), device=x.device)
-                feat[:, :, 0:x.size()[2], 0:x.size()[3]] = x[:]
-            else:
-                feat = x
+            if i == 0 or i == 2:
+                continue
+            # right_size = int(in_size / 4 / (i+1))
+            # if x.size()[2] != right_size:
+            #     pad = right_size - x.size()[2]
+            #     assert pad < 3 and pad > 0, "x {} should {}".format(x.size(), right_size)
+            #     feat = torch.zeros((b, x.size()[1], right_size, right_size), device=x.device)
+            #     feat[:, :, 0:x.size()[2], 0:x.size()[3]] = x[:]
+            # else:
+            #     feat = x
+            feat = x
             features.append(feat)
+            
         x = self.body[-1](x)
+        # import pdb
+        # pdb.set_trace()
+
         return x, features[::-1]

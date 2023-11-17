@@ -13,6 +13,7 @@ class MLDataSet(Dataset):
     def __init__(self, args, config, mode: str='train') -> None:
         super().__init__()
         
+        self.mode = mode
         image_size = config['image_size']
         self.transform = transforms.Compose([
             transforms.Resize(image_size),
@@ -55,7 +56,11 @@ class MLDataSet(Dataset):
         
         
         img = self.transform(Image.fromarray(raw_img))
-        label = self.transform_mask(Image.fromarray(raw_label))
+        
+        if self.mode == 'train':
+            label = self.transform_mask(Image.fromarray(raw_label))
+        else :
+            label = transforms.Compose([transforms.ToTensor()])(Image.fromarray(raw_label))
         # label = label.squeeze()
         
         return {

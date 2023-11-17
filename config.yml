@@ -1,6 +1,6 @@
 
-epochs: 100
-batch_size: 12
+epochs: 50
+batch_size: 4
 lr: 0.001
 val_percent: 0.01
 weight_decay: 0.000000001
@@ -11,8 +11,8 @@ gradient_clipping: 0.1
 save_checkpoint: True
 img_scale: 0.1
 dir_checkpoint: './checkpoint'
-image_size: [224, 224] # [540, 960]
-num_work: 0
+image_size: [896, 896] # [540, 960]
+num_work: 4
 model: 'Transunet'
 
 Unet:

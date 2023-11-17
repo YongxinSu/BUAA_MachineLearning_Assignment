@@ -12,15 +12,15 @@ def get_args():
     parser = argparse.ArgumentParser(description='Train the UNet on images and target masks')
     parser.add_argument('--config', type=str, default='./config.yml', help='config yaml path')
     parser.add_argument('--data', type=str, default='./data', help='data path')
-    parser.add_argument('--model', type=str, default='./checkpoint/checkpoint_epoch100.pth', help='inference checkpoint')
+    parser.add_argument('--model', type=str, default='./checkpoint/checkpoint_epoch41.pth', help='inference checkpoint')
     return parser.parse_args()
 
 
 def inference(args, config):
     
-    batch_size = config['train']['batch_size']
-    amp = config['train']['amp']
-    num_work = config['train']['num_work']
+    batch_size = config['batch_size']
+    amp = config['amp']
+    num_work = config['num_work']
     
     dataset = MLDataSet(args, config, 'infer')
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -30,6 +30,7 @@ def inference(args, config):
     
     model = get_model(config).to(device)
     state_dict = torch.load(args.model)
+    print(state_dict.keys())
     model.load_state_dict(state_dict)
     
     result = evaluate(model, dataloader, device, amp)

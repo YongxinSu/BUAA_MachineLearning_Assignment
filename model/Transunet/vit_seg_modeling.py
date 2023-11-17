@@ -336,13 +336,14 @@ class DecoderCup(nn.Module):
             use_batchnorm=True,
         )
         decoder_channels = config.decoder_channels
+    
         in_channels = [head_channels] + list(decoder_channels[:-1])
         out_channels = decoder_channels
 
         if self.config.n_skip != 0:
             skip_channels = self.config.skip_channels
-            for i in range(4-self.config.n_skip):  # re-select the skip channels according to n_skip
-                skip_channels[3-i]=0
+            for i in range(6-self.config.n_skip):  # re-select the skip channels according to n_skip
+                skip_channels[5-i]=0
 
         else:
             skip_channels=[0,0,0,0]
@@ -351,6 +352,8 @@ class DecoderCup(nn.Module):
             DecoderBlock(in_ch, out_ch, sk_ch) for in_ch, out_ch, sk_ch in zip(in_channels, out_channels, skip_channels)
         ]
         self.blocks = nn.ModuleList(blocks)
+
+        
 
     def forward(self, hidden_states, features=None):
         B, n_patch, hidden = hidden_states.size()  # reshape from (B, n_patch, hidden) to (B, h, w, hidden)
@@ -453,6 +456,10 @@ class Transunet(nn.Module):
                 self.transformer.embeddings.hybrid_model.root.gn.bias.copy_(gn_bias)
 
                 for bname, block in self.transformer.embeddings.hybrid_model.body.named_children():
+                    if bname[0] == 'c':
+                        continue
+                    if bname[0] == 'd':
+                        bname = 'block1'
                     for uname, unit in block.named_children():
                         unit.load_from(res_weight, n_block=bname, n_unit=uname)
 
